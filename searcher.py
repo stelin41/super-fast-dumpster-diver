@@ -48,10 +48,7 @@ def main():
     parser.add_argument("--limit", type=int, default=10, help="Max number of results (default: 10)")
     parser.add_argument("--left-offset", type=int, default=64, help="Bytes to read before the match (default: 64)")
     parser.add_argument("--right-offset", type=int, default=128, help="Bytes to read after the match (default: 128)")
-    parser.add_argument("--json", action="store_true", help="Output results as JSON (one object per line)"
-    )
-
-
+    parser.add_argument("--json", action="store_true", help="Output results as JSON (one object per line)")
     
     args = parser.parse_args()
     
@@ -121,11 +118,11 @@ def main():
 
                 if m == email:
                     if s == target_rel_start and e == target_rel_end:
-                        return f"\033[32m{m}\033[0m"   # exact hit at offset
+                        return f"\033[32m{m}\033[0m"   # exact hit at offset GREEN
                     else:
-                        return f"\033[34m{m}\033[0m"    # same email elsewhere
+                        return f"\033[34m{m}\033[0m"    # same email elsewhere BLUE
                 else:
-                    return f"\033[31m{m}\033[0m"         # other emails (optional)
+                    return f"\033[31m{m}\033[0m"         # other emails RED
 
             context_colored = pattern.sub(colorize, context)
 
