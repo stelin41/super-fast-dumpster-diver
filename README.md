@@ -40,7 +40,7 @@ While currently designed for **cybersecurity intelligence and recon gathering**,
 ### 1. Setup
 
 
-**Generate credentials:**
+~~**Generate credentials:**~~
 ```bash
 # Generate random password in .env
 # TODO: currently broken
