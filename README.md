@@ -39,13 +39,15 @@ While currently designed for **cybersecurity intelligence and recon gathering**,
 
 ### 1. Setup
 
+
 **Generate credentials:**
 ```bash
 # Generate random password in .env
-echo "CLICKHOUSE_PASSWORD=$(openssl rand -base64 12)" > .env
-echo "CLICKHOUSE_USER=default" >> .env
-echo "CLICKHOUSE_HOST=localhost" >> .env
-echo "CLICKHOUSE_PORT=8123" >> .env
+# TODO: currently broken
+#echo "CLICKHOUSE_PASSWORD=$(openssl rand -base64 12)" > .env
+#echo "CLICKHOUSE_USER=default" >> .env
+#echo "CLICKHOUSE_HOST=localhost" >> .env
+#echo "CLICKHOUSE_PORT=8123" >> .env
 ```
 
 **Start the Database:**
@@ -98,6 +100,8 @@ Schema 'uuids':
   --uuid UUIDS_UUID     Search for UUID
 ```
 
+IMPORTANT: the path to scan MUST be the ABSOLUTE PATH
+(TODO: check that)
 ```bash
 # Index a directory (recursively)
 python3 loader.py /path/to/scan --schema emails
