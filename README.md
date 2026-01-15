@@ -57,7 +57,7 @@ pip install tqdm  # Optional, for progress bars
 ### 2. Ingest Data (Incremental Indexing)
 The loader scans directories, tracks changes, and only re-indexes modified files. How much this process takes varies a lot, but for example with a 7200RPM HDD + 8th gen i5, it can usually take 1-1.5h per 100GB for files with a high concentration of matches (\~1B rows per 100GB) or 15-20m per 100GB for files with a low density of matches.
 
-Pro tip: run `find /path/to/scan > /path/to/scan/paths.txt` if you want to index the filenames or directories.
+Pro tip: run `find /path/to/scan > /path/to/scan/paths.txt` if you want to index the filenames or folder names.
 
 ```bash
 # To check all avaliable schemas, they are defined in config.py
