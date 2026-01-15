@@ -82,12 +82,13 @@ def main():
         return
 
     results = get_results(where, limit=args.limit)
-    
-    if not results:
-        print("No results found.")
-        return
 
-    print(f"Found {len(results)} matches:\n")
+    if not not args.json:
+        if not results:
+            print("No results found.")
+            return
+        
+        print(f"Found {len(results)} matches:\n")
     for row in results:
         fpath = row['file_path']
         start = row['offset']
