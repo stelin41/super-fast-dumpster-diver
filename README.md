@@ -75,7 +75,7 @@ awk -F: '\
     print \"\\\"" f "\\\",\" o \",\\\"" m "\\\"\""
 }'" > scan.sh
 
-# Run the loader
+# Run the loader. This process is expectect to take about 1h per 100GBs or 1h per 1bn rows in a HDD.
 python3 loader.py --command "$(cat scan.sh)"
 ```
 
