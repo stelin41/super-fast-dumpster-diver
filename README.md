@@ -87,7 +87,7 @@ awk -F: '
 }'
 ```
 
-Now run the loader. This process is expectect to take about 1h per 100GB or 1h per 1bn rows (in a HDD).
+Now run the loader. This process is expected to take about 1h per 100GB or 1h per 1bn rows (in a HDD). NOTE: It drops the table and starts over if you run it twice.
 
 ```bash
 python3 loader.py --command "$(cat scan.sh)"
