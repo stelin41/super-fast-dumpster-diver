@@ -65,17 +65,31 @@ pip install tqdm  # Optional, for progress bars
 Pipe *anything* into the loader. The provided command uses `grep` to extract emails from raw files.
 
 ```bash
-# Generate the scan command (optimized awk/grep pipeline)
-echo "grep -r -b -o -P -a -i '[a-z0-9._%+-]{1,300}@[a-z0-9.-]{1,300}\.[a-z]{2,8}' /path/to/scan | \
-awk -F: '\
+# Change /path/to/scan (must be the absolute path) and write this optimized grep/awk pipeline into scan.sh, 
+# It will find all emails and output in a CSV stream. Use ggrep instead of grep if you are in macos.
+grep -r -b -o -P -a -i '[a-z0-9._%+-]{1,300}@[a-z0-9.-]{1,300}\.[a-z]{2,8}' /path/to/scan | \
+awk -F: '
 {
-    if (NF == 3) { f=\$1; o=\$2; m=\$3 } 
-    else { m=\$NF; o=\$(NF-1); f=substr(\$0, 1, length(\$0)-length(o)-length(m)-2) }
-    gsub(\"\\\"", \"\\\\\\\"\\\"", f)
-    print \"\\\"" f "\\\",\" o \",\\\"" m "\\\"\""
-}'" > scan.sh
+    if (NF == 3) {
+        # FAST PATH: No colons in path
+        f = $1; o = $2; m = $3
+    } else {
+        # SLOW PATH: Path contains colons
+        m = $NF; o = $(NF-1)
+        # Use substr instead of sub/regex for speed
+        f = substr($0, 1, length($0) - length(o) - length(m) - 2)
+    }
 
-# Run the loader. This process is expectect to take about 1h per 100GBs or 1h per 1bn rows in a HDD.
+    # Escape quotes
+    gsub("\"", "\"\"", f)
+
+    # Standard CSV output
+    print "\"" f "\"," o ",\"" m "\""
+}'
+```
+
+```bash
+# Run the loader. This process is expectect to take about 1h per 100GB or 1h per 1bn rows in a HDD.
 python3 loader.py --command "$(cat scan.sh)"
 ```
 
