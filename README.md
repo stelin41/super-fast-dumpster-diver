@@ -96,8 +96,24 @@ python3 loader.py --command "$(cat scan.sh)"
 ### 3. Search
 **Instant Search (Hits Primary Key):**
 ```bash
-python3 searcher.py --email user@example.com
+python3 searcher.py --email lol@gmail.com
 python3 searcher.py --domain example.com
+```
+
+_Output:_
+```
+Found 2 matches:
+
+/path/to/scan/file1.txt (Offsets 297019840-297019853):
+,XXXXXXX,XXXXXXXXXXX,X
+XXXXXXX,XXXXXXXXXXX,XXXXXXXXXXXXXXXXXXXX,lol@gmail.com,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXX,XXXXXXXXXXX,XXXXXXXXXXXXXXXXXXXX
+----------------------------------------
+/path/to/scan/dir/file2.txt (Offsets 2123879797-2123879810):
+XXXXXXXXXXXXXXXXXXXXXX,1234567891234@gmail.com,XXXXXXXXXXXXXXXX,lol@gmail.com,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXX
+----------------------------------------
 ```
 
 **Fast Username Search (Uses Bloom Filter):**
@@ -107,16 +123,17 @@ python3 searcher.py --user admin
 
 **Output JSON (for scripts/APIs):**
 ```bash
-python3 searcher.py --email user@gmail.com --json
+python3 searcher.py --email lol@gmail.com --json
 ```
 _Output:_
 ```json
-{"email": "user@gmail.com", "file_path": "/data/dump.txt", "offset_start": 1050, ...}
+{"email": "lol@gmail.com", "file_path": "/path/to/scan/file1.txt", "offset_start": 297019840, "offset_end": 297019853, "left_offset": 64, "right_offset": 128, "context": ",XXXXXXX,XXXXXXXXXXX,X\r\nXXXXXXX,XXXXXXXXXXX,XXXXXXXXXXXXXXXXXXXX,lol@gmail.com,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\r\nXXXXXXX,XXXXXXXXXXX,XXXXXXXXXXXXXXXXXXXX"}
+{"email": "lol@gmail.com", "file_path": "/path/to/scan/dir/file2.txt", "offset_start": 2123879797, "offset_end": 2123879810, "left_offset": 64, "right_offset": 128, "context": "XXXXXXXXXXXXXXXXXXXXXX,1234567891234@gmail.com,XXXXXXXXXXXXXXXX,lol@gmail.com,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\nXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\nXXXXXXXXXXXXXXXXXXXXXXXXX"}
 ```
 
 ---
 
-Expect more updates soon™️ 👀
+Expect more updates soon™️
 
 ## 📝 License
 
