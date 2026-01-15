@@ -64,9 +64,8 @@ pip install tqdm  # Optional, for progress bars
 ### 2. Ingest Data (The "Dumpster Dive")
 Pipe *anything* into the loader. The provided command uses `grep` to extract emails from raw files.
 
-```bash
-# Change /path/to/scan (must be the absolute path) and write this optimized grep/awk pipeline into scan.sh, 
-# It will find all emails and output in a CSV stream. Use ggrep instead of grep if you are in macos.
+Change /path/to/scan (absolute path) to your desired folder to index and write the pipeline into scan.sh
+```bash 
 grep -r -b -o -P -a -i '[a-z0-9._%+-]{1,300}@[a-z0-9.-]{1,300}\.[a-z]{2,8}' /path/to/scan | \
 awk -F: '
 {
@@ -88,8 +87,9 @@ awk -F: '
 }'
 ```
 
+Now run the loader. This process is expectect to take about 1h per 100GB or 1h per 1bn rows (in a HDD).
+
 ```bash
-# Run the loader. This process is expectect to take about 1h per 100GB or 1h per 1bn rows in a HDD.
 python3 loader.py --command "$(cat scan.sh)"
 ```
 
