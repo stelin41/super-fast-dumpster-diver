@@ -32,11 +32,11 @@ By using **ClickHouse** instead of traditional row-based databases (Postgres/MyS
 
 ## ⚠️ Security Warning
 
-**This tool is designed for local, trusted usage only.**
+**This tool is currently designed for local, trusted usage only.**
 
 *   **No Input Sanitization**: The searcher constructs SQL queries directly. It is vulnerable to SQL Injection if exposed to untrusted input.
 *   **Root Privileges**: The default Docker configuration runs as root.
-*   **Do NOT expose** the database port or the searcher script to the public internet.
+*   **Do NOT expose** the database port (default credentials lol) or the searcher script to the public internet.
 
 ---
 
