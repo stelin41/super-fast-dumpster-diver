@@ -4,9 +4,11 @@ import sys
 import subprocess
 import json
 import re
+import urllib.parse
 from config import CLICKHOUSE_URL, SCHEMAS
 
-def get_results(table_name, match_expr, where_clause, limit=10):
+def get_results(table_name, match_expr, where_clause, query_params, limit=10):
+    limit = int(limit)
     query = f"""
         SELECT file_path, offset, {match_expr} as match 
         FROM {table_name} 
@@ -14,13 +16,34 @@ def get_results(table_name, match_expr, where_clause, limit=10):
         LIMIT {limit} 
         FORMAT JSON
     """
-    cmd = ["curl", "-s", "-X", "POST", CLICKHOUSE_URL, "--data-binary", query]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    
+    # ClickHouse parameters are passed as param_<name>=value in query string
+    url_params = {}
+    for k, v in query_params.items():
+        url_params[f"param_{k}"] = v
+    
+    query_string = urllib.parse.urlencode(url_params)
+    full_url = f"{CLICKHOUSE_URL}/?{query_string}" if query_string else CLICKHOUSE_URL
+
     try:
-        data = json.loads(res.stdout)
-        return data.get('data', [])
-    except:
-        print(f"Error querying DB: {res.stdout}", file=sys.stderr)
+        cmd = ["curl", "-s", "-X", "POST", full_url, "--data-binary", query]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if res.returncode != 0:
+            print(f"Error querying DB (curl failed): {res.stderr}", file=sys.stderr)
+            return []
+
+        # Check for HTTP errors that curl -s might swallow (unless we check output)
+        # But if it returns JSON, we try to parse it.
+        try:
+            data = json.loads(res.stdout)
+            return data.get('data', [])
+        except json.JSONDecodeError:
+            print(f"Error querying DB (invalid JSON): {res.stdout}", file=sys.stderr)
+            return []
+            
+    except Exception as e:
+        print(f"Error querying DB: {e}", file=sys.stderr)
         return []
 
 def read_context(file_path, start_offset, end_offset, l_context_bytes=64, r_context_bytes=128):
@@ -41,7 +64,22 @@ def read_context(file_path, start_offset, end_offset, l_context_bytes=64, r_cont
         return f"[Error reading file: {e}]"
 
 def main():
-    parser = argparse.ArgumentParser(description="Search indexed data.")
+    epilog_text = """Wildcard Support:
+  For options ending in '-wildcard', standard SQL LIKE patterns are used:
+  %    Matches any sequence of characters (including none).
+  _    Matches any single character.
+
+  Escaping:
+  To match a literal '%', '_', or '\\', precede it with a backslash: \\%, \\_, or \\\\.
+  (Note: Some shells may require double backslashes: \\\\%)
+
+Case sensitivity:
+  All searches and default regexes are case sensitive."""
+    parser = argparse.ArgumentParser(
+        description="Search indexed data.",
+        epilog=epilog_text,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     
     # Global args
     parser.add_argument("--limit", type=int, default=10, help="Max number of results (default: 10)")
@@ -66,6 +104,7 @@ def main():
     
     active_schema = None
     where_clause = None
+    query_params = {}
     
     for dest, (s_name, q_conf) in arg_map.items():
         val = getattr(args, dest)
@@ -73,10 +112,11 @@ def main():
             active_schema = s_name
             filter_func = q_conf.get('filter')
             if filter_func:
-                where_clause = filter_func(val)
-                if where_clause is None:
+                result = filter_func(val)
+                if result is None:
                     print(f"Invalid input for {q_conf['arg']}", file=sys.stderr)
                     return
+                where_clause, query_params = result
             else:
                 print(f"Configuration error: No filter defined for {q_conf['arg']}", file=sys.stderr)
                 return
@@ -92,7 +132,7 @@ def main():
     match_expr = schema_def['result_format']
     highlight_regex_str = schema_def.get('highlight_regex', '')
 
-    results = get_results(table, match_expr, where_clause, limit=args.limit)
+    results = get_results(table, match_expr, where_clause, query_params, limit=args.limit)
 
     if args.json:
         for row in results:
@@ -106,7 +146,8 @@ def main():
             output = {
                 "match": match_str,
                 "file_path": fpath,
-                "offset_start": start,
+                "offset": start,
+                "relative_offset": args.left_offset,
                 "context": context,
             }
             print(json.dumps(output, ensure_ascii=False))
@@ -159,6 +200,8 @@ def main():
             print(f"{fpath} (Offset {start}):")
             print(context_colored)
             print("-" * 40)
+        if len(results) == args.limit:
+            print(f"Reached maximum number of results, to increase it use --limit LIMIT")
 
 if __name__ == "__main__":
     main()

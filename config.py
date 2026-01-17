@@ -11,6 +11,11 @@ def load_env():
                     continue
                 if "=" in line:
                     key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip()
+                    # Strip matching quotes if present
+                    if len(value) >= 2 and ((value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'"))):
+                        value = value[1:-1]
                     os.environ[key] = value
 
 load_env()
@@ -25,16 +30,16 @@ CLICKHOUSE_URL = f"http://{CLICKHOUSE_USER}:{CLICKHOUSE_PASSWORD}@{CLICKHOUSE_HO
 def email_filter(val):
     if '@' not in val: return None
     u, d = val.split('@', 1)
-    return f"domain = '{d}' AND user = '{u}'"
+    return "domain = {domain:String} AND user = {user:String}", {"domain": d, "user": u}
 
 def domain_filter(val):
-    return f"domain = '{val}'"
+    return "domain = {domain:String}", {"domain": val}
 
 def exact_match_filter(col):
-    return lambda val: f"{col} = '{val}'"
+    return lambda val: (f"{col} = {{val:String}}", {"val": val})
 
 def wildcard_filter(col):
-    return lambda val: f"{col} LIKE '{val.replace('*', '%').replace('?', '_')}'"
+    return lambda val: (f"{col} LIKE {{val:String}}", {"val": val})
 
 # Common extraction command template
 # We use a awk script to be extremely fast and robust against shell parsing issues
@@ -60,7 +65,7 @@ def get_extract_cmd(regex):
     # Escape single quotes for shell
     safe_regex = regex.replace("'", r"'\\''")
     # Added --null to grep and tr to replace nulls with Unit Separator (octal 037)
-    return f"tr '\\n' '\\0' | xargs -0 grep -H -r -b -o -P -a -i --null '{safe_regex}' | tr '\\0' '\\037' | {AWK_TEMPLATE}"
+    return f"tr '\\n' '\\0' | xargs -0 grep -H -r -b -o -P -a --null '{safe_regex}' | tr '\\0' '\\037' | {AWK_TEMPLATE}"
 
 SCHEMAS = {
     "emails": {
@@ -78,9 +83,9 @@ SCHEMAS = {
             ORDER BY (domain, user)
             SETTINGS index_granularity = 8192
         """,
-        "extract_command": get_extract_cmd(r"[a-z0-9._%+-]{1,256}@[a-z0-9.-]{1,256}\.[a-z]{2,10}"),
+        "extract_command": get_extract_cmd(r"[a-zA-Z0-9._%+-]{1,256}@[a-zA-Z0-9.-]{1,256}\.[a-zA-Z]{2,10}"),
         "result_format": "concat(user, '@', domain)",
-        "highlight_regex": r"[a-z0-9._%+-]{1,256}@[a-z0-9.-]{1,256}\.[a-z]{2,10}",
+        "highlight_regex": r"[a-zA-Z0-9._%+-]{1,256}@[a-zA-Z0-9.-]{1,256}\.[a-zA-Z]{2,10}",
         "queries": {
             "email": {
                 "arg": "--email",
@@ -94,13 +99,18 @@ SCHEMAS = {
             },
             "domain_wildcard": {
                 "arg": "--email-domain-wildcard",
-                "help": "Search for emails in domain with wildcard (e.g. *.com)",
+                "help": "Search for emails in domain with wildcard (e.g. %%.com)",
                 "filter": wildcard_filter("domain")
             },
             "user": {
                 "arg": "--user",
-                "help": "Search for emails by username (slow)",
-                "filter": lambda val: f"user = '{val}'"
+                "help": "Search for emails by username (slow - see README for tuning)",
+                "filter": exact_match_filter("user")
+            },
+            "user_wildcard": {
+                "arg": "--user-wildcard",
+                "help": "Search for emails by username with wildcard (slow - see README for tuning)",
+                "filter": wildcard_filter("user")
             }
         }
     },
@@ -119,18 +129,18 @@ SCHEMAS = {
             ORDER BY domain
             SETTINGS index_granularity = 8192
         """,
-        "extract_command": get_extract_cmd(r"(?<!@)\b[a-z0-9.-]{1,256}\.[a-z]{2,10}\b"),
+        "extract_command": get_extract_cmd(r"(?<![a-zA-Z0-9.-@])\b[a-zA-Z0-9.-]{1,256}\.[a-zA-Z]{2,32}\b"),
         "result_format": "domain",
-        "highlight_regex": r"(?<!@)\b[a-z0-9.-]{1,256}\.[a-z]{2,10}\b",
+        "highlight_regex": r"(?<![a-zA-Z0-9.-@])\b[a-zA-Z0-9.-]{1,256}\.[a-zA-Z]{2,32}\b",
         "queries": {
             "domain": {
                 "arg": "--domain",
-                "help": "Search for exact *standalone* domain (anything that is not part of an email address)",
+                "help": "Search for exact *standalone* domain (structure similar to a domain and is not part of an email address).",
                 "filter": domain_filter
             },
             "domain_wildcard": {
                 "arg": "--domain-wildcard",
-                "help": "Search for *standalone* domain with wildcard (e.g. *.org)",
+                "help": "Search for *standalone* domain with wildcard (e.g. %%.org or com.android.%%)",
                 "filter": wildcard_filter("domain")
             }
         }
@@ -155,6 +165,11 @@ SCHEMAS = {
                 "arg": "--ip",
                 "help": "Search for exact IP",
                 "filter": exact_match_filter("ip")
+            },
+            "ip_wildcard": {
+                "arg": "--ip-wildcard",
+                "help": "Search for IP with wildcard",
+                "filter": wildcard_filter("ip")
             }
         }
     },
@@ -178,6 +193,11 @@ SCHEMAS = {
                 "arg": "--uuid",
                 "help": "Search for UUID",
                 "filter": exact_match_filter("uuid")
+            },
+            "uuid_wildcard": {
+                "arg": "--uuid-wildcard",
+                "help": "Search for UUID with wildcard",
+                "filter": wildcard_filter("uuid")
             }
         }
     }

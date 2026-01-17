@@ -70,9 +70,17 @@ def get_indexed_state(schema_name):
     except:
         return {}
 
-def scan_directory(root_dir):
-    """Yields (path, mtime, size, inode) for all files in directory."""
-    for root, dirs, files in os.walk(root_dir):
+def scan_directory(target_path):
+    """Yields (path, mtime, size, inode) for all files in directory or a single file."""
+    if os.path.isfile(target_path):
+        try:
+            stat = os.stat(target_path)
+            yield os.path.abspath(target_path), stat.st_mtime, stat.st_size, stat.st_ino
+        except OSError:
+            pass
+        return
+
+    for root, dirs, files in os.walk(target_path):
         for name in files:
             path = os.path.join(root, name)
             # Skip hidden files or internal metadata
@@ -178,8 +186,8 @@ def main():
     parser = argparse.ArgumentParser(description="Incremental Loader for Super Fast Dumpster Diver")
     parser.add_argument("path", help="Directory to scan")
     parser.add_argument("--schema", default="emails", help="Schema to use (defined in config.py)")
-    parser.add_argument("--reindex", action="store_true", help="Force reindexing of all files")
-    parser.add_argument("--clean", action="store_true", help="Drop existing table and start fresh")
+    parser.add_argument("--reindex", action="store_true", help="Force re-parsing of files in the target path, replacing their existing data without affecting other indexed files")
+    parser.add_argument("--clean", action="store_true", help="Wipe ALL data for this schema globally by dropping and recreating the table before indexing")
     args = parser.parse_args()
 
     # Wait for DB
@@ -196,6 +204,12 @@ def main():
 
     setup_db(args.schema, drop=args.clean)
     
+    # Resolve to absolute path and validate
+    args.path = os.path.abspath(args.path)
+    if not os.path.exists(args.path):
+        print(f"Error: Path '{args.path}' does not exist.", file=sys.stderr)
+        sys.exit(1)
+
     schema_config = SCHEMAS.get(args.schema)
     
     # Get current state
@@ -204,7 +218,7 @@ def main():
     else:
         indexed_state = get_indexed_state(args.schema)
 
-    # Warmup cache
+    # Warmup cache, it significantly speeds up the discovery phase
     print(f"Warming up cache for {args.path}...")
     subprocess.run(["du", "-s", args.path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -297,7 +311,8 @@ def main():
 
     # Cleanup removed files
     # If we are not in reindex/clean mode, we should check for files that are in DB but not on disk
-    if not args.reindex and not args.clean and indexed_state:
+    # We only do this if scanning a directory (to avoid purging index when updating single files)
+    if not args.reindex and not args.clean and indexed_state and os.path.isdir(args.path):
         # This can be slow if indexed_state is huge (millions). 
         # But python sets are fast.
         to_remove = set(indexed_state.keys()) - files_seen
