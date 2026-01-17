@@ -227,7 +227,13 @@ curl -s -X POST http://default:password@localhost:8123 --data-binary "SELECT * F
 
 ---
 
-Expect more updates soon™️
+## ⚖️ Ethical Use
+
+Super Fast Dumpster Diver is strictly intended for ethical research, security testing, and defense purposes only. We do not condone or support any malicious activity, unauthorized access, or actions violating laws or the rights of others.
+
+By using this software, you agree to comply with all applicable laws and assume full responsibility for your actions. This code is provided "as-is" without any warranty, and the developers disclaim all liability for misuse or damage. Use at your own risk.
+
+---
 
 ## 📝 License
 
