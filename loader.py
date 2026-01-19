@@ -5,6 +5,7 @@ import sys
 import subprocess
 import time
 import urllib.parse
+import json
 from datetime import datetime
 try:
     from tqdm import tqdm
@@ -16,9 +17,34 @@ from config import CLICKHOUSE_URL, SCHEMAS
 # Global progress bar for rows
 global_row_pbar = None
 
-def run_query(query, quiet=True):
-    cmd = ["curl", "-s", "-X", "POST", CLICKHOUSE_URL, "--data-binary", "@-"]
-    result = subprocess.run(cmd, input=query, capture_output=True, text=True)
+def run_query(query, params=None, data=None, quiet=True):
+    url = CLICKHOUSE_URL
+    
+    # Encode params for ClickHouse (param_key=value)
+    qparams = {}
+    if params:
+        for k, v in params.items():
+            if isinstance(v, list):
+                # JSON dump list to ensure safe array format ["a", "b"]
+                qparams[f"param_{k}"] = json.dumps(v)
+            else:
+                qparams[f"param_{k}"] = str(v)
+    
+    request_input = query
+    if data is not None:
+        qparams['query'] = query
+        request_input = data
+
+    if qparams:
+        # Merge with existing URL params
+        url_parts = list(urllib.parse.urlparse(url))
+        query_dict = dict(urllib.parse.parse_qsl(url_parts[4]))
+        query_dict.update(qparams)
+        url_parts[4] = urllib.parse.urlencode(query_dict)
+        url = urllib.parse.urlunparse(url_parts)
+
+    cmd = ["curl", "-s", "-X", "POST", url, "--data-binary", "@-"]
+    result = subprocess.run(cmd, input=request_input, capture_output=True, text=True)
     if result.returncode != 0:
         raise Exception(f"CURL error: {result.stderr}")
     if "Code:" in result.stdout and "Error:" in result.stdout:
@@ -34,7 +60,7 @@ def setup_db(schema_name, drop=False):
     if drop:
         print(f"Dropping table {schema['table_name']}...")
         run_query(f"DROP TABLE IF EXISTS {schema['table_name']}")
-        run_query(f"ALTER TABLE indexed_files DELETE WHERE schema = '{schema_name}'")
+        run_query(f"ALTER TABLE indexed_files DELETE WHERE schema = '{schema['table_name']}'")
 
     print(f"Ensuring table {schema['table_name']} exists...")
     run_query(schema['create_table_sql'])
@@ -59,12 +85,12 @@ def get_indexed_state(schema_name):
         return {}
 
     print("Fetching indexed file state...")
-    query = f"SELECT file_path, last_modified FROM indexed_files WHERE schema = '{schema_name}' FORMAT JSON"
-    cmd = ["curl", "-s", "-X", "POST", CLICKHOUSE_URL, "--data-binary", query]
+    # Use params for schema safety, though schema_name comes from args
+    query = "SELECT file_path, last_modified FROM indexed_files WHERE schema = {s:String} FORMAT JSON"
+    cmd = ["curl", "-s", "-X", "POST", f"{CLICKHOUSE_URL}/?param_s={urllib.parse.quote(schema_name)}", "--data-binary", query]
     result = subprocess.run(cmd, capture_output=True, text=True)
     
     try:
-        import json
         data = json.loads(result.stdout)
         return {row['file_path']: row['last_modified'] for row in data.get('data', [])}
     except:
@@ -110,14 +136,16 @@ def process_batch(schema_name, files_chunk, schema_config, pbar=None, batch_size
     global global_row_pbar
     table = schema_config['table_name']
     
-    # 1. Cleanup old data (Optimized delete)
-    quoted_files = [f"'{f.replace(chr(39), chr(92)+chr(39))}'" for f, _ in files_chunk]
-    if quoted_files:
-        file_list_str = ",".join(quoted_files)
-        run_query(f"ALTER TABLE {table} DELETE WHERE file_path IN ({file_list_str})")
+    # 1. Cleanup old data (Optimized delete using params)
+    files_list = [f for f, _ in files_chunk]
+    if files_list:
+        run_query(
+            f"ALTER TABLE {table} DELETE WHERE file_path IN {{files:Array(String)}}",
+            params={"files": files_list}
+        )
 
     # 2. Run extraction
-    file_list_input = "\n".join([f for f, _ in files_chunk]).encode('utf-8')
+    file_list_input = "\n".join(files_list).encode('utf-8')
     extract_cmd = schema_config['extract_command']
     
     extractor = subprocess.Popen(extract_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -170,15 +198,19 @@ def process_batch(schema_name, files_chunk, schema_config, pbar=None, batch_size
          # print(f"Extractor finished with code {extractor.returncode}")
          pass
 
-    # 4. Update tracking table
-    values = []
+    # 4. Update tracking table (Use JSONEachRow for safety)
+    data_rows = []
     for f, mtime in files_chunk:
-        safe_f = f.replace("'", "\\'" )
-        values.append(f"('{safe_f}', {mtime}, now(), '{schema_name}')")
+        data_rows.append({
+            'file_path': f,
+            'last_modified': mtime,
+            'schema': schema_name
+        })
     
-    if values:
-        insert_sql = f"INSERT INTO indexed_files (file_path, last_modified, last_indexed, schema) VALUES {','.join(values)}"
-        run_query(insert_sql)
+    if data_rows:
+        ndjson = "\n".join([json.dumps(row) for row in data_rows])
+        query = "INSERT INTO indexed_files (file_path, last_modified, schema) FORMAT JSONEachRow"
+        run_query(query, data=ndjson)
 
     return len(files_chunk)
 
@@ -201,6 +233,13 @@ def main():
     else:
         print("ClickHouse not available.", file=sys.stderr)
         sys.exit(1)
+
+    schema = SCHEMAS.get(args.schema)
+    if not schema:
+        print(f"Error: Schema '{schema_name}' not found in config.py", file=sys.stderr)
+        sys.exit(1)
+    args.schema = schema['table_name']
+    
 
     setup_db(args.schema, drop=args.clean)
     
@@ -323,9 +362,15 @@ def main():
             CHUNK = 1000
             for i in range(0, len(remove_list), CHUNK):
                 chunk = remove_list[i:i+CHUNK]
-                quoted = [f"'{f.replace(chr(39), chr(92)+chr(39))}'" for f in chunk]
-                run_query(f"ALTER TABLE {schema_config['table_name']} DELETE WHERE file_path IN ({','.join(quoted)})")
-                run_query(f"ALTER TABLE indexed_files DELETE WHERE schema='{args.schema}' AND file_path IN ({','.join(quoted)})")
+                # Use params for deletion
+                run_query(
+                    f"ALTER TABLE {schema_config['table_name']} DELETE WHERE file_path IN {{files:Array(String)}}",
+                    params={"files": chunk}
+                )
+                run_query(
+                    f"ALTER TABLE indexed_files DELETE WHERE schema='{schema_config['table_name']}' AND file_path IN {{files:Array(String)}}",
+                    params={"files": chunk}
+                )
 
     print(f"Finished. Processed {processed_count} files.")
 

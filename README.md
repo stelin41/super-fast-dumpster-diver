@@ -1,5 +1,6 @@
 # 🗑️ Super Fast Dumpster Diver 🚀
 
+
 **Simple. Hackable. Blazingly Fast.**
 
 > "Finding a needle in a 2-billion-row haystack in an instant."
@@ -8,60 +9,49 @@ Super Fast Dumpster Diver is a minimalist tool to index and search specific patt
 
 While currently designed for **cybersecurity intelligence and recon gathering**, its simple and hackable nature makes it easy to adapt for other use cases like searching massive codebases. It is designed for easy integration with other software and APIs.
 
-### 🎯 Key Advantages
-*   **Blazingly Fast**: Instant searches even in billions of rows.
-*   **Space Efficient**: Uses significantly less disk space for indexes than traditional solutions like **Recoll** (typically ~20% of raw data size).
-*   **Hardware Friendly**: Optimized for sequential I/O; runs great on standard HDDs.
-*   **Hackable**: Built on the KISS principle—smart use of ClickHouse and a few Python scripts.
-
----
-
 ## ⚡ Key Features
 
-*   **Versatile**: Currently optimized for **emails**, but the pattern-matching loader can be easily tweaked for **standalone domains (URLs, code, logs), IPs, UUIDs**, or any regex.
+*   **Versatile**: Currently optimized for **emails**, standalone domains (URLs, code, logs, ...), IPs and UUIDs; but the pattern-matching loader can be easily tweaked for any regex.
 *   **Efficient**: The index typically consumes up to **~20%** of the original raw data size per regex indexed.
 *   **JSON Output**: Pipe-friendly JSON output for integration with other tools.
 *   **Standard SQL**: The backend is just ClickHouse. You can query it with DBeaver, Grafana, or build your own API on top of it.
 
 ---
 
-## ⚠️ Security Warning
+## Quick start (typical setup) 🏃
+```bash
+## Setup
+# Clone repository
+git clone 'https://github.com/stelin41/super-fast-dumpster-diver'
+cd super-fast-dumpster-diver
 
-**This tool is currently designed for local, trusted usage only.**
+# Generate credentials
+echo "CLICKHOUSE_PASSWORD=$(openssl rand -hex 16)" > .env
+echo "CLICKHOUSE_USER=default" >> .env
+echo "CLICKHOUSE_HOST=localhost" >> .env
+echo "CLICKHOUSE_PORT=8123" >> .env
 
-*   **No Input Sanitization**: The searcher constructs SQL queries directly. It is vulnerable to SQL Injection if exposed to untrusted input.
-*   **Root Privileges**: The default Docker configuration runs as root.
-*   **Do NOT expose** the searcher script to the public internet.
+pip install tqdm  # Optional, for progress bars
+
+## Basic usage
+# Start database (stored in ./ch_data)
+docker compose up -d
+
+# Index a directory (recursively)
+python3 loader.py /path/to/scan --schema emails
+
+# Search
+python3 searcher.py --email example@example.com
+
+# When you are done, stop database
+#docker compose down
+```
 
 ---
 
 ## 🚀 Usage
 
-### 1. Setup
-
-**Clone the repository:**
-```bash
-git clone 'https://github.com/stelin41/super-fast-dumpster-diver'
-cd super-fast-dumpster-diver
-```
-
-**Generate credentials:**
-```bash
-# Generate random password in .env
-echo "CLICKHOUSE_PASSWORD=$(openssl rand -base64 12)" > .env
-echo "CLICKHOUSE_USER=default" >> .env
-echo "CLICKHOUSE_HOST=localhost" >> .env
-echo "CLICKHOUSE_PORT=8123" >> .env
-```
-
-**Start the Database:**
-```bash
-docker compose up -d
-#docker compose down # Command to stop the database
-pip install tqdm  # Optional, for progress bars
-```
-
-### 2. Ingest Data (Incremental Indexing)
+### 1. Ingest Data (Incremental Indexing)
 The loader scans directories, tracks changes, and only re-indexes modified files. How much this process takes varies a lot, but for example with a 7200RPM HDD + 8th gen i5, it can usually take \~1.5h per 100GB for files with a high concentration of matches (\~1B rows per 100GB) or 15-20m per 100GB for files with a low density of matches.
 
 Pro tip: run `find /path/to/scan > /path/to/scan/paths.txt` if you want to index the filenames or folder names.
@@ -144,7 +134,7 @@ Case sensitivity:
 **Customizing Extraction:**
 Edit `config.py` to define new Schemas (e.g., standalone domains, IPs, UUIDs) and their extraction commands.
 
-### 3. Search
+### 2. Search
 **Emails:**
 ```bash
 python3 searcher.py --email lol@gmail.com
@@ -164,7 +154,9 @@ python3 searcher.py --domain-wildcard '%.example.com'
 **IPs & UUIDs:**
 ```bash
 python3 searcher.py --ip 1.2.3.4
+python3 searcher.py --ip-wildcard '1.2.3.%'
 python3 searcher.py --uuid 550e8400-e29b-41d4-a716-446655440000
+python3 searcher.py --uuid-wildcard '550e8400-e29b-41d4-a716-%'
 ```
 
 _Example:_
@@ -202,7 +194,7 @@ By using **ClickHouse** instead of traditional row-based databases (Postgres/MyS
 | **I/O Pattern** | Random Seeks (Slow) | Sequential Reads (Fast) |
 | **Storage** | Row-Oriented | Column-Oriented (Reads only what it needs) |
 | **Indexing** | B-Tree (Heavy) | Sparse Index (Fits in RAM) |
-| **Performance** | Seconds/Minutes | **500\~100ms (7200RPM HDD, <100ms if SSD) for 2B+ rows** |
+| **Performance** | Minutes | **500\~100ms (7200RPM HDD, <100ms if SSD) for 2B+ rows** |
 
 ---
 
@@ -210,7 +202,7 @@ By using **ClickHouse** instead of traditional row-based databases (Postgres/MyS
 
 You can balance both worlds (speed/cost) by storing the index in a SSD and the raw data in a HDD.
 
-The default email schema uses `ORDER BY (domain, user)`. This makes searching by **domain** (or exact email) instant ($O(\log N)$).
+The default email schema uses `ORDER BY (domain, user)`. This makes searching by **domain** (or exact email) instant ( $O(\log N)$ ).
 
 ### Customizing Performance
 *   **Prioritize Users**: If you care more about finding a specific user (e.g., "admin") across all domains, change the order to `ORDER BY (user, domain)`. This will make user searches instant but domain searches slower.

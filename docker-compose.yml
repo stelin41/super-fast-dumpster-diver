@@ -11,5 +11,6 @@ services:
     environment:
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
       - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+    #user: "1000:1000" # it runs as 101:101 by default. Change this to your user if you want ch_data to have you as the owner.
     volumes:
       - ./ch_data:/var/lib/clickhouse
