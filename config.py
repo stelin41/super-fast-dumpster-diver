@@ -2,7 +2,7 @@ import os
 
 def load_env():
     """Simple .env loader to avoid dependencies."""
-    env_path = ".env"
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
     if os.path.exists(env_path):
         with open(env_path, "r") as f:
             for line in f:
