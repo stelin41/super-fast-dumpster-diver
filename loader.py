@@ -50,7 +50,7 @@ def setup_db(schema_key, drop=False):
 def get_indexed_state(schema_name):
     try:
         rows = run_query(
-            "SELECT file_path, last_modified FROM indexed_files WHERE schema = %(s)s",
+            "SELECT file_path, last_modified FROM indexed_files FINAL WHERE schema = %(s)s",
             {"s": schema_name}
         )
         return {r[0]: r[1] for r in rows}
