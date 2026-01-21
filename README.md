@@ -31,7 +31,7 @@ echo "CLICKHOUSE_USER=default" >> .env
 echo "CLICKHOUSE_HOST=localhost" >> .env
 echo "CLICKHOUSE_PORT=9000" >> .env
 
-chmod +x *.py # Change permissions
+chmod +x loader.py searcher.py # Change permissions
 #sudo apt update && sudo apt install uv -y # make sure you have python's uv installed
 
 ## Basic usage
