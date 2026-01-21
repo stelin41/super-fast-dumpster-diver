@@ -1,4 +1,11 @@
 #!/usr/bin/env -S uv run
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "clickhouse-driver>=0.2.10",
+#     "tqdm>=4.67.1",
+# ]
+# ///
 import argparse
 import sys
 import re
