@@ -156,6 +156,21 @@ def main():
             total_bytes += size
     discovery_pbar.close()
 
+    # Cleanup removed files
+    if not args.reindex and not args.clean and indexed_state:
+        to_remove = set(indexed_state.keys()) - files_seen
+        if to_remove:
+            print(f"Removing {len(to_remove)} deleted files from index...")
+            remove_list = list(to_remove)
+            CHUNK = 1000
+            for i in range(0, len(remove_list), CHUNK):
+                chunk = remove_list[i:i+CHUNK]
+                # Remove from data table
+                run_query(f"ALTER TABLE {table_id} DELETE WHERE file_path IN %(f)s", {"f": chunk})
+                # Remove from tracking table
+                run_query(f"ALTER TABLE indexed_files DELETE WHERE schema = %(s)s AND file_path IN %(f)s",
+                          {"s": table_id, "f": chunk})
+
     if not all_files:
         print("Everything is up to date.")
         return
@@ -189,21 +204,6 @@ def main():
 
     main_pbar.close()
     global_row_pbar.close()
-
-    # Cleanup removed files
-    if not args.reindex and not args.clean and indexed_state:
-        to_remove = set(indexed_state.keys()) - files_seen
-        if to_remove:
-            print(f"Removing {len(to_remove)} deleted files from index...")
-            remove_list = list(to_remove)
-            CHUNK = 1000
-            for i in range(0, len(remove_list), CHUNK):
-                chunk = remove_list[i:i+CHUNK]
-                # Remove from data table
-                run_query(f"ALTER TABLE {table_id} DELETE WHERE file_path IN %(f)s", {"f": chunk})
-                # Remove from tracking table
-                run_query(f"ALTER TABLE indexed_files DELETE WHERE schema = %(s)s AND file_path IN %(f)s",
-                          {"s": table_id, "f": chunk})
 
 if __name__ == "__main__":
     main()
