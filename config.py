@@ -1,4 +1,5 @@
 import os
+import shutil
 
 def load_env():
     """Simple .env loader to avoid dependencies."""
@@ -13,59 +14,56 @@ def load_env():
                     key, value = line.split("=", 1)
                     key = key.strip()
                     value = value.strip()
-                    # Strip matching quotes if present
                     if len(value) >= 2 and ((value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'"))):
                         value = value[1:-1]
                     os.environ[key] = value
 
 load_env()
 
+# --- Grep Detection for macOS Compatibility ---
+# macOS default grep is BSD; GNU Grep (ggrep) is required for Perl Regex (-P)
+GREP_BIN = shutil.which("ggrep") or shutil.which("grep") or "grep"
+
+# Native Interface settings
 CLICKHOUSE_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
-CLICKHOUSE_PORT = os.getenv("CLICKHOUSE_PORT", "8123")
+CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT", "9000"))
 CLICKHOUSE_USER = os.getenv("CLICKHOUSE_USER", "default")
 CLICKHOUSE_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "password")
-CLICKHOUSE_URL = f"http://{CLICKHOUSE_USER}:{CLICKHOUSE_PASSWORD}@{CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}"
 
-# Helper lambdas for query generation
+# Updated filters to use native driver syntax: %(param)s
 def email_filter(val):
     if '@' not in val: return None
     u, d = val.split('@', 1)
-    return "domain = {domain:String} AND user = {user:String}", {"domain": d, "user": u}
+    return "domain = %(domain)s AND user = %(user)s", {"domain": d, "user": u}
 
 def domain_filter(val):
-    return "domain = {domain:String}", {"domain": val}
+    return "domain = %(domain)s", {"domain": val}
 
 def exact_match_filter(col):
-    return lambda val: (f"{col} = {{val:String}}", {"val": val})
+    return lambda val: (f"{col} = %(val)s", {"val": val})
 
 def wildcard_filter(col):
-    return lambda val: (f"{col} LIKE {{val:String}}", {"val": val})
+    return lambda val: (f"{col} LIKE %(val)s", {"val": val})
 
 # Common extraction command template
 # We use a awk script to be extremely fast and robust against shell parsing issues
-AWK_TEMPLATE = """
-awk -F'\\037' '
+AWK_TEMPLATE = r"""
+awk -F'\037' '
 {
-    f = $1
-    # $2 is offset:match
     idx = index($2, ":")
     if (idx > 0) {
         o = substr($2, 1, idx - 1)
         m = substr($2, idx + 1)
-        
-        # Escape quotes
-        gsub(\"\\\"\", \"\\\"\\\"\", f)
-
-        # Standard CSV output
-        print \"\\\"\" f \"\\\",\" o \",\\\"\" m \"\\\"\"
+        # Output: path|offset|match (using \037 as separator)
+        printf "%s\037%s\037%s\n", $1, o, m
     }
 }'
 """.strip()
+
 def get_extract_cmd(regex):
-    # Escape single quotes for shell
     safe_regex = regex.replace("'", r"'\\''")
-    # Added --null to grep and tr to replace nulls with Unit Separator (octal 037)
-    return f"tr '\\n' '\\0' | xargs -0 grep -H -r -b -o -P -a --null '{safe_regex}' | tr '\\0' '\\037' | {AWK_TEMPLATE}"
+    # tr turns grep's null separator into our awk separator
+    return f"tr '\\n' '\\0' | xargs -0 {GREP_BIN} -H -r -b -o -P -a --null '{safe_regex}' | tr '\\0' '\\037' | {AWK_TEMPLATE}"
 
 SCHEMAS = {
     "emails": {
@@ -99,24 +97,21 @@ SCHEMAS = {
             },
             "domain_wildcard": {
                 "arg": "--email-domain-wildcard",
-                "help": "Search for emails in domain with wildcard (e.g. %%.com)",
+                "help": "Search for emails in domain wildcard (Uses LIKE syntax: %% and _)",
                 "filter": wildcard_filter("domain")
             },
             "user": {
                 "arg": "--user",
-                "help": "Search for emails by username (slow - see README for tuning)",
+                "help": "Search for emails by username (See README to improve performance)",
                 "filter": exact_match_filter("user")
             },
             "user_wildcard": {
                 "arg": "--user-wildcard",
-                "help": "Search for emails by username with wildcard (slow - see README for tuning)",
+                "help": "Search for emails by username wildcard (Uses LIKE syntax; See README to improve performance)",
                 "filter": wildcard_filter("user")
             }
         }
     },
-    # "domains" schema: Captures domains that are NOT part of an email address.
-    # This is useful for finding URLs, URIs, domains in source code, logs, strings in binaries, cookies, etc.
-    # It uses a negative lookbehind (?<!@) to ignore domains immediately preceded by an '@'.
     "domains": {
         "table_name": "domains",
         "main_column": "domain",
@@ -127,7 +122,6 @@ SCHEMAS = {
                 domain String
             ) ENGINE = MergeTree()
             ORDER BY domain
-            SETTINGS index_granularity = 8192
         """,
         "extract_command": get_extract_cmd(r"(?<![a-zA-Z0-9.-@])\b[a-zA-Z0-9.-]{1,256}\.[a-zA-Z]{2,32}\b"),
         "result_format": "domain",
@@ -135,12 +129,12 @@ SCHEMAS = {
         "queries": {
             "domain": {
                 "arg": "--domain",
-                "help": "Search for exact *standalone* domain (structure similar to a domain and is not part of an email address).",
+                "help": "Search exact standalone domain (structure similar to a domain and is not part of an email address).",
                 "filter": domain_filter
             },
             "domain_wildcard": {
                 "arg": "--domain-wildcard",
-                "help": "Search for *standalone* domain with wildcard (e.g. %%.org or com.android.%%)",
+                "help": "Wildcard standalone domain search (Uses LIKE syntax; e.g. %%.org or com.android.%%)",
                 "filter": wildcard_filter("domain")
             }
         }
@@ -163,12 +157,12 @@ SCHEMAS = {
         "queries": {
             "ip": {
                 "arg": "--ip",
-                "help": "Search for exact IP",
+                "help": "Search exact IP",
                 "filter": exact_match_filter("ip")
             },
             "ip_wildcard": {
                 "arg": "--ip-wildcard",
-                "help": "Search for IP with wildcard",
+                "help": "Wildcard IP search (Uses LIKE syntax)",
                 "filter": wildcard_filter("ip")
             }
         }
@@ -191,12 +185,12 @@ SCHEMAS = {
         "queries": {
             "uuid": {
                 "arg": "--uuid",
-                "help": "Search for UUID",
+                "help": "Search UUID",
                 "filter": exact_match_filter("uuid")
             },
             "uuid_wildcard": {
                 "arg": "--uuid-wildcard",
-                "help": "Search for UUID with wildcard",
+                "help": "Wildcard UUID search (Uses LIKE syntax)",
                 "filter": wildcard_filter("uuid")
             }
         }

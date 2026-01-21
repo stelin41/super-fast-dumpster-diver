@@ -18,7 +18,7 @@ While currently designed for **cybersecurity intelligence and recon gathering**,
 
 ---
 
-## Quick start (typical setup) 🏃
+## 🏃 Quick start (typical setup)
 ```bash
 ## Setup
 # Clone repository
@@ -29,22 +29,23 @@ cd super-fast-dumpster-diver
 echo "CLICKHOUSE_PASSWORD=$(openssl rand -hex 16)" > .env
 echo "CLICKHOUSE_USER=default" >> .env
 echo "CLICKHOUSE_HOST=localhost" >> .env
-echo "CLICKHOUSE_PORT=8123" >> .env
+echo "CLICKHOUSE_PORT=9000" >> .env
 
-pip install tqdm  # Optional, for progress bars
+chmod +x *.py # Change permissions
+#sudo apt update && sudo apt install uv -y # make sure you have python's uv installed
 
 ## Basic usage
-# Start database (stored in ./ch_data)
+# Start database (stored in ./ch_data), make sure it is running when using loader.py or searcher.py
 docker compose up -d
 
 # Index a directory (recursively)
-python3 loader.py /path/to/scan --schema emails
+./loader.py /path/to/scan --schema emails
 
 # Search
-python3 searcher.py --email example@example.com
+./searcher.py --email example@example.com
 
 # When you are done, stop database
-#docker compose down
+docker compose down
 ```
 
 ---
@@ -57,111 +58,103 @@ The loader scans directories, tracks changes, and only re-indexes modified files
 Pro tip: run `find /path/to/scan > /path/to/scan/paths.txt` if you want to index the filenames or folder names.
 
 ```bash
-# If you are in macos, use ggrep
+# If you are in macos, install ggrep
 #brew install grep
-#alias grep=ggrep && echo "alias grep=ggrep" >> ~/.zshrc # or whatever shell you are using
 
 # Index a directory (recursively)
-python3 loader.py /path/to/scan --schema emails
+./loader.py /path/to/scan --schema emails
 
 # Resume/Update index (only processes new/modified/deleted files)
-python3 loader.py /path/to/scan --schema emails
+./loader.py /path/to/scan --schema emails
 
 # Force re-indexing (only the indicated directory, recursively)
-python3 loader.py /path/to/scan --schema emails --reindex
+./loader.py /path/to/scan --schema emails --reindex
 
 # Clean start (Drop DB)
-python3 loader.py /path/to/scan --schema emails --clean
+./loader.py /path/to/scan --schema emails --clean
 ```
 
 ```bash
 # To check all avaliable schemas (they are defined in config.py)
-python3 searcher.py --help
-usage: searcher.py [-h] [--limit LIMIT] [--left-offset LEFT_OFFSET] [--right-offset RIGHT_OFFSET] [--json] [--email EMAILS_EMAIL] [--email-domain EMAILS_DOMAIN]
-                   [--email-domain-wildcard EMAILS_DOMAIN_WILDCARD] [--user EMAILS_USER] [--user-wildcard EMAILS_USER_WILDCARD] [--domain DOMAINS_DOMAIN]
-                   [--domain-wildcard DOMAINS_DOMAIN_WILDCARD] [--ip IPS_IP] [--ip-wildcard IPS_IP_WILDCARD] [--uuid UUIDS_UUID] [--uuid-wildcard UUIDS_UUID_WILDCARD]
+./searcher.py --help
+usage: searcher.py [-h] [--limit LIMIT] [--left-offset LEFT_OFFSET] [--right-offset RIGHT_OFFSET] [--json]
+                   [--email EMAILS_EMAIL] [--email-domain EMAILS_DOMAIN] [--email-domain-wildcard EMAILS_DOMAIN_WILDCARD]
+                   [--user EMAILS_USER] [--user-wildcard EMAILS_USER_WILDCARD] [--domain DOMAINS_DOMAIN]
+                   [--domain-wildcard DOMAINS_DOMAIN_WILDCARD] [--ip IPS_IP] [--ip-wildcard IPS_IP_WILDCARD]
+                   [--uuid UUIDS_UUID] [--uuid-wildcard UUIDS_UUID_WILDCARD]
 
 Search indexed data.
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
-  --limit LIMIT         Max number of results (default: 10)
+  --limit LIMIT         Limit results (Default: 10)
   --left-offset LEFT_OFFSET
-                        Bytes to read before the match
   --right-offset RIGHT_OFFSET
-                        Bytes to read after the match
-  --json                Output results as JSON
+  --json
 
 Schema 'emails':
   --email EMAILS_EMAIL  Search for exact email
   --email-domain EMAILS_DOMAIN
                         Search for emails in domain
   --email-domain-wildcard EMAILS_DOMAIN_WILDCARD
-                        Search for emails in domain with wildcard (e.g. %.com)
-  --user EMAILS_USER    Search for emails by username (slow - see README for tuning)
+                        Search for emails in domain wildcard (Uses LIKE syntax: % and _)
+  --user EMAILS_USER    Search for emails by username (See README to improve performance)
   --user-wildcard EMAILS_USER_WILDCARD
-                        Search for emails by username with wildcard (slow - see README for tuning)
+                        Search for emails by username wildcard (Uses LIKE syntax; See README to improve performance)
 
 Schema 'domains':
   --domain DOMAINS_DOMAIN
-                        Search for exact *standalone* domain (structure similar to a domain and is not part of an email address).
+                        Search exact standalone domain (structure similar to a domain and is not part of an email
+                        address).
   --domain-wildcard DOMAINS_DOMAIN_WILDCARD
-                        Search for *standalone* domain with wildcard (e.g. %.org or com.android.%)
+                        Wildcard standalone domain search (Uses LIKE syntax; e.g. %.org or com.android.%)
 
 Schema 'ips':
-  --ip IPS_IP           Search for exact IP
+  --ip IPS_IP           Search exact IP
   --ip-wildcard IPS_IP_WILDCARD
-                        Search for IP with wildcard
+                        Wildcard IP search (Uses LIKE syntax)
 
 Schema 'uuids':
-  --uuid UUIDS_UUID     Search for UUID
+  --uuid UUIDS_UUID     Search UUID
   --uuid-wildcard UUIDS_UUID_WILDCARD
-                        Search for UUID with wildcard
-
-Wildcard Support:
-  For options ending in '-wildcard', standard SQL LIKE patterns are used:
-  %    Matches any sequence of characters (including none).
-  _    Matches any single character.
-
-  Escaping:
-  To match a literal '%', '_', or '\', precede it with a backslash: \%, \_, or \\.
-  (Note: Some shells may require double backslashes: \\%)
-
-Case sensitivity:
-  All searches and default regexes are case sensitive.
+                        Wildcard UUID search (Uses LIKE syntax)
 ```
 
 **Customizing Extraction:**
 Edit `config.py` to define new Schemas (e.g., standalone domains, IPs, UUIDs) and their extraction commands.
 
 ### 2. Search
+
+Note: searches are case sensitive.
+
 **Emails:**
 ```bash
-python3 searcher.py --email lol@gmail.com
-python3 searcher.py --email-domain example.com
-python3 searcher.py --email-domain-wildcard '%.example.com'
-python3 searcher.py --user admin
-python3 searcher.py --user-wildcard 'john_something' # _ is a single character wildcard, see --help
+# Wildcards use LIKE syntax from SQL
+./searcher.py --email lol@gmail.com
+./searcher.py --email-domain example.com
+./searcher.py --email-domain-wildcard '%.example.com' # % matches 0 or more characters
+./searcher.py --user admin
+./searcher.py --user-wildcard 'john_something' # _ is a single character wildcard
 ```
 
 **Domains (Standalone):**
 Search for domains appearing in URLs, source code, logs, etc. (ignoring those in email addresses).
 ```bash
-python3 searcher.py --domain example.com
-python3 searcher.py --domain-wildcard '%.example.com'
+./searcher.py --domain example.com
+./searcher.py --domain-wildcard '%.example.com'
 ```
 
 **IPs & UUIDs:**
 ```bash
-python3 searcher.py --ip 1.2.3.4
-python3 searcher.py --ip-wildcard '1.2.3.%'
-python3 searcher.py --uuid 550e8400-e29b-41d4-a716-446655440000
-python3 searcher.py --uuid-wildcard '550e8400-e29b-41d4-a716-%'
+./searcher.py --ip 1.2.3.4
+./searcher.py --ip-wildcard '1.2.3.%'
+./searcher.py --uuid 550e8400-e29b-41d4-a716-446655440000
+./searcher.py --uuid-wildcard '550e8400-e29b-41d4-a716-%'
 ```
 
 _Example:_
+`./searcher.py --email lol@gmail.com`
 ```
-$ python3 searcher.py --email lol@gmail.com
 Found 2 matches:
 
 /path/to/scan/file1.txt (Offsets 297019840-297019853):
@@ -177,8 +170,8 @@ XXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
 **Output JSON (for scripts/APIs):**
+`./searcher.py --email lol@gmail.com --json`
 ```json
-$ python3 searcher.py --email lol@gmail.com --json
 {"match": "lol@gmail.com", "file_path": "/path/to/scan/file1.txt", "offset": 297019840, "relative_offset": 64, "context": ",XXXXXXX,XXXXXXXXXXX,X\r\nXXXXXXX,XXXXXXXXXXX,XXXXXXXXXXXXXXXXXXXX,lol@gmail.com,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\r\nXXXXXXX,XXXXXXXXXXX,XXXXXXXXXXXXXXXXXXXX"}
 {"match": "lol@gmail.com", "file_path": "/path/to/scan/dir/file2.txt", "offset": 2123879797, "relative_offset": 64, "context": "XXXXXXXXXXXXXXXXXXXXXX,1234567891234@gmail.com,XXXXXXXXXXXXXXXX,lol@gmail.com,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\nXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\nXXXXXXXXXXXXXXXXXXXXXXXXX"}
 ```

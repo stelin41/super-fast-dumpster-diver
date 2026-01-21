@@ -1,0 +1,10 @@
+[project]
+name = "super-fast-dumpster-diver"
+version = "0.1.0"
+description = "A blazingly fast pattern-based text indexer and searcher."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "clickhouse-driver>=0.2.10",
+    "tqdm>=4.67.1",
+]
