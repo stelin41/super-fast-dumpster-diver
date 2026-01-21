@@ -146,9 +146,11 @@ def main():
     subprocess.run(["du", "-s", args.path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     all_files, total_bytes = [], 0
+    files_seen = set()
     discovery_pbar = tqdm(desc="Scanning", unit="files")
     for fpath, mtime, size, inode in scan_directory(args.path):
         discovery_pbar.update(1)
+        files_seen.add(fpath)
         if fpath not in indexed_state or abs(mtime - indexed_state[fpath]) > 0.001:
             all_files.append((fpath, mtime, size, inode))
             total_bytes += size
@@ -187,6 +189,21 @@ def main():
 
     main_pbar.close()
     global_row_pbar.close()
+
+    # Cleanup removed files
+    if not args.reindex and not args.clean and indexed_state:
+        to_remove = set(indexed_state.keys()) - files_seen
+        if to_remove:
+            print(f"Removing {len(to_remove)} deleted files from index...")
+            remove_list = list(to_remove)
+            CHUNK = 1000
+            for i in range(0, len(remove_list), CHUNK):
+                chunk = remove_list[i:i+CHUNK]
+                # Remove from data table
+                run_query(f"ALTER TABLE {table_id} DELETE WHERE file_path IN %(f)s", {"f": chunk})
+                # Remove from tracking table
+                run_query(f"ALTER TABLE indexed_files DELETE WHERE schema = %(s)s AND file_path IN %(f)s",
+                          {"s": table_id, "f": chunk})
 
 if __name__ == "__main__":
     main()
