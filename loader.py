@@ -213,7 +213,7 @@ def main():
         main_pbar.update(current_batch_size)
 
     main_pbar.close()
-    if global_row_pbar:
+    if global_row_pbar is not None:
         global_row_pbar.close()
 
 if __name__ == "__main__":
