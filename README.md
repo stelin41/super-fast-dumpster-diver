@@ -5,6 +5,8 @@
 
 > "Finding a needle in a multi-billion-row haystack in an instant."
 
+<img width="1284" height="874" alt="demo" src="https://github.com/user-attachments/assets/eb17e9e1-1a8f-41e5-99b1-e4f6d6993f55" />
+
 Super Fast Dumpster Diver is a minimalist tool to index and search specific patterns inside the **contents** of massive unstructured plaintext files (logs, dumps, archives, binaries, html files) across a directory tree. Think of it as **"IntelX at home"**—a self-hosted search engine for your offline intelligence. It provides **instant search** on typical hardware, performing exceptionally well even on slow, spinning HDDs.
 
 While currently designed for **cybersecurity intelligence and recon gathering**, its simple and hackable nature makes it easy to adapt for other use cases like searching massive codebases. It is designed for easy integration with other software and APIs.
