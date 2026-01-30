@@ -3,9 +3,9 @@
 
 **Simple. Hackable. Blazingly Fast.**
 
-> "Finding a needle in a 2-billion-row haystack in an instant."
+> "Finding a needle in a multi-billion-row haystack in an instant."
 
-Super Fast Dumpster Diver is a minimalist tool to index and search specific patterns inside the **contents** of massive unstructured plaintext files (logs, dumps, archives, binaries) across a directory tree. It provides **instant search** on typical hardware, performing exceptionally well even on slow, spinning HDDs.
+Super Fast Dumpster Diver is a minimalist tool to index and search specific patterns inside the **contents** of massive unstructured plaintext files (logs, dumps, archives, binaries, html files) across a directory tree. Think of it as **"IntelX at home"**—a self-hosted search engine for your offline intelligence. It provides **instant search** on typical hardware, performing exceptionally well even on slow, spinning HDDs.
 
 While currently designed for **cybersecurity intelligence and recon gathering**, its simple and hackable nature makes it easy to adapt for other use cases like searching massive codebases. It is designed for easy integration with other software and APIs.
 
@@ -32,7 +32,7 @@ echo "CLICKHOUSE_HOST=localhost" >> .env
 echo "CLICKHOUSE_PORT=9000" >> .env
 
 chmod +x loader.py searcher.py # Change permissions
-#sudo apt update && sudo apt install uv -y # make sure you have python's uv installed
+# make sure you have python's uv installed: https://docs.astral.sh/uv/getting-started/installation/
 
 ## Basic usage
 # Start database (stored in ./ch_data), make sure it is running when using loader.py or searcher.py
@@ -153,27 +153,37 @@ Search for domains appearing in URLs, source code, logs, etc. (ignoring those in
 ```
 
 _Example:_
-`./searcher.py --email lol@gmail.com`
+`./searcher.py --email 'deadbeef@example.com'`
 ```
-Found 2 matches:
-
-/path/to/scan/file1.txt (Offsets 297019840-297019853):
-,XXXXXXX,XXXXXXXXXXX,X
-XXXXXXX,XXXXXXXXXXX,XXXXXXXXXXXXXXXXXXXX,lol@gmail.com,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXX,XXXXXXXXXXX,XXXXXXXXXXXXXXXXXXXX
+--- /mnt/examples/demo.txt | offset 87648519 ---
+mple1@example.com:hi
+wowz@example.com:can
+hi@example.com:you
+deadbeef@example.com:this
+deadbeef@example.com:text
+exampl3@example.com:read
+data@iamdoingademo.com:doing
+demo@hi.example.com:right
+cool.demo@e
 ----------------------------------------
-/path/to/scan/dir/file2.txt (Offsets 2123879797-2123879810):
-XXXXXXXXXXXXXXXXXXXXXX,1234567891234@gmail.com,XXXXXXXXXXXXXXXX,lol@gmail.com,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXX
+--- /mnt/examples/demo.txt | offset 87648546 ---
+example.com:can
+hi@example.com:you
+deadbeef@example.com:this
+deadbeef@example.com:text
+exampl3@example.com:read
+data@iamdoingademo.com:doing
+demo@hi.example.com:right
+cool.demo@example.com:now
+example8@ex
 ----------------------------------------
 ```
 
 **Output JSON (for scripts/APIs):**
-`./searcher.py --email lol@gmail.com --json`
+`./searcher.py --email 'deadbeef@example.com' --json`
 ```json
-{"match": "lol@gmail.com", "file_path": "/path/to/scan/file1.txt", "offset": 297019840, "relative_offset": 64, "context": ",XXXXXXX,XXXXXXXXXXX,X\r\nXXXXXXX,XXXXXXXXXXX,XXXXXXXXXXXXXXXXXXXX,lol@gmail.com,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\r\nXXXXXXX,XXXXXXXXXXX,XXXXXXXXXXXXXXXXXXXX"}
-{"match": "lol@gmail.com", "file_path": "/path/to/scan/dir/file2.txt", "offset": 2123879797, "relative_offset": 64, "context": "XXXXXXXXXXXXXXXXXXXXXX,1234567891234@gmail.com,XXXXXXXXXXXXXXXX,lol@gmail.com,XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\nXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\nXXXXXXXXXXXXXXXXXXXXXXXXX"}
+{"file_path": "/mnt/examples/demo.txt", "offset": 87648519, "match": "deadbeef@example.com", "context": "mple1@example.com:hi\r\nwowz@example.com:can\r\nhi@example.com:you\r\ndeadbeef@example.com:this\r\ndeadbeef@example.com:text\r\nexampl3@example.com:read\r\ndata@iamdoingademo.com:doing\r\ndemo@hi.example.com:right\r\ncool.demo@e", "search_type": "emails_email", "search_query": "deadbeef@example.com"}
+{"file_path": "/mnt/examples/demo.txt", "offset": 87648546, "match": "deadbeef@example.com", "context": "example.com:can\r\nhi@example.com:you\r\ndeadbeef@example.com:this\r\ndeadbeef@example.com:text\r\nexampl3@example.com:read\r\ndata@iamdoingademo.com:doing\r\ndemo@hi.example.com:right\r\ncool.demo@example.com:now\r\nexample8@ex", "search_type": "emails_email", "search_query": "deadbeef@example.com"}
 ```
 
 ---
