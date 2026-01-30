@@ -150,10 +150,6 @@ def main():
     
     indexed_state = {} if (args.reindex or args.clean) else get_indexed_state(table_id)
 
-    # Warmup cache, it significantly speeds up the discovery phase
-    print(f"Warming up cache for {args.path} ...")
-    subprocess.run(["du", "-s", args.path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
     all_files, total_bytes = [], 0
     files_seen = set()
     discovery_pbar = tqdm(desc="Scanning", unit="files")
