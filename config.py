@@ -45,25 +45,10 @@ def exact_match_filter(col):
 def wildcard_filter(col):
     return lambda val: (f"{col} LIKE %(val)s", {"val": val})
 
-# Common extraction command template
-# We use a awk script to be extremely fast and robust against shell parsing issues
-AWK_TEMPLATE = r"""
-awk -F'\037' '
-{
-    idx = index($2, ":")
-    if (idx > 0) {
-        o = substr($2, 1, idx - 1)
-        m = substr($2, idx + 1)
-        # Output: path|offset|match (using \037 as separator)
-        printf "%s\037%s\037%s\n", $1, o, m
-    }
-}'
-""".strip()
-
 def get_extract_cmd(regex):
     safe_regex = regex.replace("'", r"'\\''")
-    # tr turns grep's null separator into our awk separator
-    return f"tr '\\n' '\\0' | xargs -0 {GREP_BIN} -H -r -b -o -P -a --null '{safe_regex}' | tr '\\0' '\\037' | {AWK_TEMPLATE}"
+    # output format: `PATH\0OFFSET:MATCH`, notice the first separator is \0 and the second is :
+    return f"tr '\\n' '\\0' | xargs -0 {GREP_BIN} -H -r -b -o -P -a --null '{safe_regex}' --"
 
 SCHEMAS = {
     "emails": {

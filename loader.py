@@ -110,11 +110,17 @@ def process_batch(schema_name, files_chunk, schema_config, scan_pbar=None, batch
         def tracked_generator():
             if extractor.stdout:
                 for line in extractor.stdout:
-                    parts = line.decode('utf-8', 'ignore').rstrip('\n').split('\037')
-                    if len(parts) == 3:
+                    try:
+                        path_bytes, rest = line.removesuffix(b'\n').split(b'\x00', 1)
+                        offset_bytes, match_bytes = rest.split(b':', 1)
+                        path = path_bytes.decode('utf-8', 'ignore')
+                        match = match_bytes.decode('utf-8', 'ignore')
                         if global_row_pbar is not None:
                             global_row_pbar.update(1)
-                        yield (parts[0], int(parts[1]), parts[2])
+                        yield (path, int(offset_bytes), match)
+                    except (ValueError, IndexError):
+                        print(f"Error when reading line: {line}", file=sys.stderr)
+                        continue
 
         client.execute(
             f"INSERT INTO {table} (file_path, offset, {main_col}) VALUES",
