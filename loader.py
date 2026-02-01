@@ -135,9 +135,10 @@ def main():
     global global_row_pbar
     parser = argparse.ArgumentParser()
     parser.add_argument("path")
-    parser.add_argument("--schema", default="emails")
-    parser.add_argument("--reindex", action="store_true")
-    parser.add_argument("--clean", action="store_true")
+    parser.add_argument("--schema", default="emails", help="Schema to use (defined in config.py)")
+    parser.add_argument("--reindex", action="store_true", help="Force re-parsing of files in the target path, replacing their existing data without affecting other indexed files")
+    parser.add_argument("--clean", action="store_true", help="Wipe ALL data for this schema globally by dropping and recreating the table before indexing")
+    parser.add_argument("--no-warmup", action="store_true", help="Skip the filesystem cache warmup (useful for SSDs or directories with millions of files)")
     args = parser.parse_args()
 
     schema_conf = config.SCHEMAS.get(args.schema)
@@ -149,6 +150,11 @@ def main():
     setup_db(table_id, drop=args.clean)
     
     indexed_state = {} if (args.reindex or args.clean) else get_indexed_state(table_id)
+
+    if not args.no_warmup:
+        # Warmup cache, it usually significantly speeds up the discovery phase, specially in HDDs
+        print(f"Warming up cache for {args.path} ...")
+        subprocess.run(["du", "-s", args.path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     all_files, total_bytes = [], 0
     files_seen = set()
