@@ -38,7 +38,7 @@ chmod +x loader.py searcher.py # Change permissions
 
 ## Basic usage
 # Start database (stored in ./ch_data), make sure it is running when using loader.py or searcher.py
-docker compose up -d && sleep 10 # Wait a little for the db to fully start
+docker compose up -d && until curl -s http://localhost:8123/ping; do sleep 1; done # Wait a little for the db to fully start
 
 # Index a directory (recursively)
 ./loader.py /path/to/scan --schema emails
